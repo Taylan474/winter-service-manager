@@ -44,6 +44,18 @@ const DURATION_PRESETS = [
   { label: "1 Std", minutes: 60 },
 ];
 
+// Calculate duration in minutes between two times (handles midnight crossover)
+const calculateDurationMinutes = (startTime: string, endTime: string): number => {
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  let diff = (endH * 60 + endM) - (startH * 60 + startM);
+  // Handle midnight crossover (e.g., 23:55 to 00:25)
+  if (diff < 0) {
+    diff += 24 * 60; // Add 24 hours
+  }
+  return diff;
+};
+
 export default function WorkHours({ userId, userName }: WorkHoursProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("add");
@@ -515,9 +527,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
     const daysWithEntries = new Set<string>();
     
     workLogs.forEach((log) => {
-      const [startH, startM] = log.start_time.split(":").map(Number);
-      const [endH, endM] = log.end_time.split(":").map(Number);
-      totalMinutes += (endH * 60 + endM) - (startH * 60 + startM);
+      totalMinutes += calculateDurationMinutes(log.start_time, log.end_time);
       daysWithEntries.add(log.date);
     });
 
@@ -571,9 +581,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
       
       let totalMinutes = 0;
       logs.forEach(log => {
-        const [startH, startM] = log.start_time.split(":").map(Number);
-        const [endH, endM] = log.end_time.split(":").map(Number);
-        totalMinutes += (endH * 60 + endM) - (startH * 60 + startM);
+        totalMinutes += calculateDurationMinutes(log.start_time, log.end_time);
       });
       
       groups.push({ date, formattedDate, logs, totalMinutes });
@@ -872,9 +880,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
                 </thead>
                 <tbody>
                   ${group.logs.map((log) => {
-                    const [startH, startM] = log.start_time.split(":").map(Number);
-                    const [endH, endM] = log.end_time.split(":").map(Number);
-                    const diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+                    const diffMinutes = calculateDurationMinutes(log.start_time, log.end_time);
                     const hours = Math.floor(diffMinutes / 60);
                     const minutes = diffMinutes % 60;
                     const bgBadge = FEATURE_FLAGS.enableBGFilter && log.street?.isBG 
@@ -1416,9 +1422,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
                       </div>
                       <div className="day-group-entries">
                         {group.logs.map((log) => {
-                          const [startH, startM] = log.start_time.split(":").map(Number);
-                          const [endH, endM] = log.end_time.split(":").map(Number);
-                          const diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+                          const diffMinutes = calculateDurationMinutes(log.start_time, log.end_time);
                           const hours = Math.floor(diffMinutes / 60);
                           const minutes = diffMinutes % 60;
 

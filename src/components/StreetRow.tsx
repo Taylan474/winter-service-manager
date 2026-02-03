@@ -378,7 +378,11 @@ export default function StreetRow({ street, role, selectedDate }: StreetRowProps
     // Use parseTimestamp for proper timezone handling (import it if needed)
     const start = new Date(startedAt.endsWith('Z') || startedAt.includes('+') ? startedAt : startedAt + 'Z');
     const end = new Date(finishedAt.endsWith('Z') || finishedAt.includes('+') ? finishedAt : finishedAt + 'Z');
-    const diffMs = end.getTime() - start.getTime();
+    let diffMs = end.getTime() - start.getTime();
+    // Handle midnight crossover (e.g., 23:55 to 00:25)
+    if (diffMs < 0) {
+      diffMs += 24 * 60 * 60 * 1000; // Add 24 hours
+    }
     const diffMins = Math.floor(diffMs / 60000);
     const hours = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
