@@ -1,0 +1,30 @@
+services:
+  winterdienst-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    container_name: winterdienst-tracker
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:80"
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - winterdienst-network
+    labels:
+      - "com.winterdienst.description=Winterdienst Tracker Application"
+      - "com.winterdienst.version=1.0.0"
+
+networks:
+  winterdienst-network:
+    driver: bridge
+    name: winterdienst-network

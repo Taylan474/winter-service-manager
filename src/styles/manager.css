@@ -1,0 +1,528 @@
+/* manager.css - Shared styling for all manager modals */
+
+.manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.manager-modal {
+  background-color: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #333;
+}
+
+.manager-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.manager-header h2 svg {
+  color: #646cff;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background-color: #2a2a2a;
+  color: #ffffff;
+}
+
+.manager-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+}
+
+.no-items {
+  text-align: center;
+  color: #777;
+  font-size: 1rem;
+  padding: 3rem 1rem;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 2rem;
+}
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  background-color: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.item-row:hover {
+  background-color: #333;
+  border-color: #444;
+}
+
+.item-name {
+  flex: 1;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-btn,
+.delete-btn,
+.save-btn,
+.cancel-btn {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-btn {
+  color: #646cff;
+}
+
+.edit-btn:hover {
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.delete-btn {
+  color: #ff5555;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background-color: rgba(255, 85, 85, 0.1);
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.save-btn {
+  color: #55ff77;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: rgba(85, 255, 119, 0.1);
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  color: #aaa;
+}
+
+.cancel-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.edit-input {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  background-color: #1f1f1f;
+  border: 2px solid #646cff;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 1rem;
+  outline: none;
+  font-weight: 600;
+}
+
+.add-new-section {
+  padding-top: 1.5rem;
+  border-top: 1px solid #333;
+}
+
+.add-new-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.add-new-form {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.add-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.add-input:focus {
+  border-color: #646cff;
+  background-color: #1f1f1f;
+  box-shadow: 0 0 0 4px rgba(100, 108, 255, 0.1);
+}
+
+.add-input::placeholder {
+  color: #777;
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #646cff;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.add-btn:hover:not(:disabled) {
+  background-color: #535bf2;
+  transform: translateY(-1px);
+}
+
+.add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Street Manager specific styles */
+.edit-street-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.edit-street-wrapper .edit-input {
+  flex: 1;
+}
+
+.edit-bg-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-bg-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #646cff;
+}
+
+.edit-bg-checkbox span {
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.street-info-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.bg-badge-small {
+  background-color: #646cff;
+  color: #ffffff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.add-bg-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.add-bg-checkbox:hover {
+  border-color: #646cff;
+  background-color: #1f1f1f;
+}
+
+.add-bg-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #646cff;
+}
+
+.add-bg-checkbox span {
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* User Manager specific styles */
+.edit-user-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.edit-user-wrapper .edit-input {
+  flex: 1;
+}
+
+.edit-role-select {
+  padding: 0.6rem 1rem;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  min-width: 140px;
+  transition: all 0.2s;
+}
+
+.edit-role-select:focus {
+  border-color: #646cff;
+}
+
+.user-info-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.user-email {
+  color: #999;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.role-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.add-user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.add-user-inputs {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.add-role-select {
+  padding: 0.75rem 1rem;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 140px;
+}
+
+.add-role-select:focus {
+  border-color: #646cff;
+  background-color: #1f1f1f;
+  box-shadow: 0 0 0 4px rgba(100, 108, 255, 0.1);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .manager-modal {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .manager-header {
+    padding: 1.2rem 1.5rem;
+  }
+
+  .manager-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .manager-content {
+    padding: 1.2rem 1.5rem;
+  }
+
+  .item-row {
+    padding: 0.9rem 1rem;
+  }
+
+  .item-name {
+    font-size: 0.95rem;
+  }
+
+  .add-new-form {
+    flex-direction: column;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* User Manager Mobile */
+  .add-user-inputs {
+    flex-direction: column;
+  }
+
+  .user-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .edit-user-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .manager-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .manager-header h2 svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .item-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+  }
+
+  .item-actions {
+    justify-content: flex-end;
+  }
+
+  .edit-input {
+    margin-bottom: 0.5rem;
+  }
+}

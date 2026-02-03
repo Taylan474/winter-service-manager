@@ -1,0 +1,164 @@
+# Vercel Continuous Deployment Workflow
+# Skips deployment if Vercel credentials are not configured
+# This allows forks and local development without requiring Vercel setup
+
+name: Vercel Deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  check-credentials:
+    name: Check Vercel Credentials
+    runs-on: ubuntu-latest
+    outputs:
+      has_credentials: ${{ steps.check.outputs.has_credentials }}
+    steps:
+      - name: Check if Vercel credentials are configured
+        id: check
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ] && [ -n "${{ secrets.VERCEL_ORG_ID }}" ] && [ -n "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "has_credentials=true" >> $GITHUB_OUTPUT
+            echo "Vercel credentials found - deployment will proceed"
+          else
+            echo "has_credentials=false" >> $GITHUB_OUTPUT
+            echo "Vercel credentials not configured - skipping deployment"
+            echo ""
+            echo "To enable Vercel deployment, add these secrets to your repository:"
+            echo "  - VERCEL_TOKEN: Your Vercel API token"
+            echo "  - VERCEL_ORG_ID: Your Vercel organization ID"
+            echo "  - VERCEL_PROJECT_ID: Your Vercel project ID"
+          fi
+
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: check-credentials
+    if: needs.check-credentials.outputs.has_credentials == 'true' && github.event_name == 'pull_request'
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.preview_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel (Preview)
+        id: deploy
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "preview_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $DEPLOYMENT_URL"
+
+      - name: Comment PR with Preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const previewUrl = '${{ steps.deploy.outputs.preview_url }}';
+            const body = `## Preview Deployment Ready\n\n**Preview URL:** ${previewUrl}\n\nThis deployment was created for commit ${context.sha.substring(0, 7)}.`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Preview Deployment Ready')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    needs: check-credentials
+    if: needs.check-credentials.outputs.has_credentials == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.production_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel (Production)
+        id: deploy
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "production_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "Production deployment: $DEPLOYMENT_URL"
+
+  skip-notification:
+    name: Skip Notification
+    runs-on: ubuntu-latest
+    needs: check-credentials
+    if: needs.check-credentials.outputs.has_credentials == 'false'
+    steps:
+      - name: Log skip reason
+        run: |
+          echo "Vercel deployment skipped"
+          echo ""
+          echo "This is expected if you haven't configured Vercel for this repository."
+          echo "The application was built successfully in the CI workflow."
+          echo ""
+          echo "To enable automatic Vercel deployments:"
+          echo "1. Create a Vercel account and project"
+          echo "2. Get your deployment token from Vercel settings"
+          echo "3. Add these GitHub repository secrets:"
+          echo "   - VERCEL_TOKEN"
+          echo "   - VERCEL_ORG_ID"  
+          echo "   - VERCEL_PROJECT_ID"

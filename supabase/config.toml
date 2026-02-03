@@ -1,0 +1,48 @@
+# Supabase Local Development Configuration
+# This enables local testing with real RLS policies
+
+[api]
+enabled = true
+port = 54321
+# Reduce rate limiting for development
+max_rows = 10000
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+
+[auth.email]
+enable_signup = false  # Match production: no registration
+double_confirm_changes = false
+enable_confirmations = false
+
+[auth.external.google]
+enabled = false
+
+[analytics]
+enabled = false
+
+# Local schema settings
+[db.pooler]
+enabled = false
+
+# Seed data will be loaded from supabase/seed.sql

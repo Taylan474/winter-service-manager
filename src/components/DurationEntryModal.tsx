@@ -1,0 +1,243 @@
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+import "../styles/duration-entry-modal.css";
+
+interface DurationEntryModalProps {
+  streetName: string;
+  streetId: string;
+  date: string; // YYYY-MM-DD format
+  onClose: () => void;
+  onSuccess: (startTime: string, endTime: string) => void;
+}
+
+// Modal for entering work duration after marking a street as completed
+// Creates a work log entry for the current user only (RLS restriction)
+export default function DurationEntryModal({
+  streetName,
+  streetId,
+  date,
+  onClose,
+  onSuccess,
+}: DurationEntryModalProps) {
+  const [duration, setDuration] = useState<number>(30);
+  const [durationInput, setDurationInput] = useState<string>("30");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const presetDurations = [15, 20, 30, 45, 60, 90];
+
+  // Handle preset button click
+  const handlePresetClick = (preset: number) => {
+    setDuration(preset);
+    setDurationInput(String(preset));
+  };
+
+  // Handle custom input change - allow empty during editing
+  const handleInputChange = (value: string) => {
+    setDurationInput(value);
+    const num = parseInt(value, 10);
+    if (!isNaN(num) && num > 0) {
+      setDuration(num);
+    }
+  };
+
+  // Handle input blur - ensure valid value
+  const handleInputBlur = () => {
+    const num = parseInt(durationInput, 10);
+    if (isNaN(num) || num <= 0) {
+      setDuration(30);
+      setDurationInput("30");
+    } else {
+      setDuration(num);
+      setDurationInput(String(num));
+    }
+  };
+
+  // Get current user on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) setCurrentUserId(data.user.id);
+    };
+    getCurrentUser();
+  }, []);
+
+  // Round time to nearest interval (e.g., 07:41 -> 07:40 for 5-min intervals)
+  const roundToNearestInterval = (hours: number, minutes: number, interval: number): { hours: number; minutes: number } => {
+    const totalMinutes = hours * 60 + minutes;
+    const roundedMinutes = Math.round(totalMinutes / interval) * interval;
+    return {
+      hours: Math.floor(roundedMinutes / 60) % 24,
+      minutes: roundedMinutes % 60,
+    };
+  };
+
+  // Calculate clean start and end times based on duration
+  // Uses 5-minute intervals for more precise times while keeping them "clean"
+  const calculateCleanTimes = (durationMinutes: number): { startTime: string; endTime: string } => {
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+
+    // Round end time to nearest 5 minutes
+    const endRounded = roundToNearestInterval(currentHours, currentMinutes, 5);
+
+    // Calculate raw start time
+    let startTotalMinutes = (endRounded.hours * 60 + endRounded.minutes) - durationMinutes;
+    
+    // Handle overnight case
+    if (startTotalMinutes < 0) {
+      startTotalMinutes += 24 * 60;
+    }
+
+    // Round start time to nearest 5 minutes
+    const startRounded = roundToNearestInterval(
+      Math.floor(startTotalMinutes / 60),
+      startTotalMinutes % 60,
+      5
+    );
+
+    // Format times as HH:MM
+    const formatTime = (h: number, m: number) =>
+      `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+
+    return {
+      startTime: formatTime(startRounded.hours, startRounded.minutes),
+      endTime: formatTime(endRounded.hours, endRounded.minutes),
+    };
+  };
+
+  const handleSubmit = async () => {
+    if (!currentUserId) {
+      setError("Benutzer nicht angemeldet");
+      return;
+    }
+
+    if (duration <= 0) {
+      setError("Bitte geben Sie eine gültige Dauer ein");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const { startTime, endTime } = calculateCleanTimes(duration);
+
+    try {
+      // Create work log entry for current user only (RLS allows only own entries)
+      const { error: insertError } = await supabase
+        .from("work_logs")
+        .insert({
+          user_id: currentUserId,
+          street_id: streetId,
+          date: date,
+          start_time: startTime,
+          end_time: endTime,
+          notes: `Auto-erstellt für ${streetName}`,
+        });
+
+      if (insertError) {
+        console.error("Error inserting work log:", insertError);
+        setError(`Fehler: ${insertError.message || insertError.code || "Unbekannter Fehler"}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      onSuccess(startTime, endTime);
+      onClose();
+    } catch (err) {
+      console.error("Error creating work log:", err);
+      setError("Ein Fehler ist aufgetreten");
+      setIsSubmitting(false);
+    }
+  };
+
+  const { startTime, endTime } = calculateCleanTimes(duration);
+
+  return (
+    <div className="duration-modal-overlay" onClick={onClose}>
+      <div className="duration-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="duration-modal-header">
+          <h3>Arbeitszeit eintragen</h3>
+          <button className="close-btn" onClick={onClose} type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="duration-modal-body">
+          <p className="street-info">
+            <strong>{streetName}</strong> wurde als erledigt markiert.
+          </p>
+
+          <p className="info-text">
+            Wie lange hat die Bearbeitung gedauert?
+          </p>
+
+          <div className="duration-presets">
+            {presetDurations.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className={`preset-btn ${duration === preset ? "active" : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handlePresetClick(preset);
+                }}
+              >
+                {preset} min
+              </button>
+            ))}
+          </div>
+
+          <div className="custom-duration">
+            <label>Oder eigene Dauer:</label>
+            <div className="duration-input-wrapper">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={durationInput}
+                onChange={(e) => handleInputChange(e.target.value.replace(/[^0-9]/g, ''))}
+                onBlur={handleInputBlur}
+                onFocus={(e) => e.target.select()}
+              />
+              <span>Minuten</span>
+            </div>
+          </div>
+
+          <div className="time-preview">
+            <div className="preview-row">
+              <span className="preview-label">Startzeit:</span>
+              <span className="preview-value">{startTime}</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">Endzeit:</span>
+              <span className="preview-value">{endTime}</span>
+            </div>
+          </div>
+
+          {error && <p className="error-message">{error}</p>}
+        </div>
+
+        <div className="duration-modal-footer">
+          <button type="button" className="cancel-btn" onClick={onClose}>
+            Überspringen
+          </button>
+          <button
+            type="button"
+            className="submit-btn"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !currentUserId}
+          >
+            {isSubmitting ? "Speichern..." : "Arbeitszeit speichern"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
