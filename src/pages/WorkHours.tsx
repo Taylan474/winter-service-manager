@@ -11,6 +11,7 @@ import "../styles/workhours.css";
 
 interface WorkLog {
   id: string;
+  user_id: string;
   date: string;
   street_id: string | null;
   start_time: string;
@@ -508,14 +509,119 @@ export default function WorkHours({ userId, userName, role }: WorkHoursProps) {
   };
 
   const deleteWorkLog = async (id: string) => {
+    // Find the log to get street_id, date, user_id before deleting
+    const logToDelete = workLogs.find(log => log.id === id);
+    
     const { error } = await supabase
       .from("work_logs")
       .delete()
       .eq("id", id);
 
     if (!error) {
+      // Sync street status after deletion
+      if (logToDelete?.street_id && logToDelete?.date) {
+        await syncStreetStatusAfterDelete(logToDelete.street_id, logToDelete.date, logToDelete.user_id);
+      }
       fetchWorkLogs();
       setDeleteConfirm({ id: "", show: false });
+    }
+  };
+
+  // Sync street status after work log deletion using RPC (bypasses RLS to see all logs)
+  const syncStreetStatusAfterDelete = async (streetId: string, date: string, _deletedUserId: string) => {
+    try {
+      // Use RPC function to properly sync status (handles RLS bypass)
+      const { error: rpcError } = await supabase.rpc('sync_street_status_after_delete', {
+        p_street_id: streetId,
+        p_date: date,
+      });
+
+      if (rpcError) {
+        // RPC function might not exist yet - fall back to client-side logic
+        console.warn("RPC sync_street_status_after_delete failed, using fallback:", rpcError.message);
+        await syncStreetStatusAfterDeleteFallback(streetId, date);
+      }
+    } catch (err) {
+      console.error("Error syncing street status:", err);
+    }
+  };
+
+  // Fallback for when RPC function doesn't exist (limited by RLS - may not work correctly for non-admins)
+  const syncStreetStatusAfterDeleteFallback = async (streetId: string, date: string) => {
+    try {
+      // Check if there are remaining work logs for this street/date
+      const { data: remainingLogs } = await supabase
+        .from("work_logs")
+        .select("user_id")
+        .eq("street_id", streetId)
+        .eq("date", date);
+
+      // Get current street status
+      const { data: statusData } = await supabase
+        .from("daily_street_status")
+        .select("id, assigned_users, current_round")
+        .eq("street_id", streetId)
+        .eq("date", date)
+        .single();
+
+      if (!statusData) return;
+
+      if (!remainingLogs || remainingLogs.length === 0) {
+        // No remaining logs - reset to "offen" and delete all history entries
+        await supabase
+          .from("daily_street_status")
+          .update({
+            status: "offen",
+            assigned_users: [],
+            started_at: null,
+            finished_at: null,
+            current_round: 1,
+          })
+          .eq("id", statusData.id);
+
+        // Delete all street_status_entries for this street/date
+        await supabase
+          .from("street_status_entries")
+          .delete()
+          .eq("street_id", streetId)
+          .eq("date", date);
+      } else {
+        // Remove deleted user from assigned_users if they have no more logs
+        const remainingUserIds = [...new Set(remainingLogs.map(l => l.user_id))];
+        const currentAssigned = statusData.assigned_users || [];
+        
+        // Only keep users who still have work logs
+        const newAssigned = currentAssigned.filter((uid: string) => remainingUserIds.includes(uid));
+        
+        if (newAssigned.length !== currentAssigned.length) {
+          await supabase
+            .from("daily_street_status")
+            .update({ assigned_users: newAssigned })
+            .eq("id", statusData.id);
+
+          // Also update street_status_entries to remove deleted user from all rounds
+          const { data: entries } = await supabase
+            .from("street_status_entries")
+            .select("id, assigned_users")
+            .eq("street_id", streetId)
+            .eq("date", date);
+
+          if (entries) {
+            for (const entry of entries) {
+              const entryAssigned = entry.assigned_users || [];
+              const updatedAssigned = entryAssigned.filter((uid: string) => remainingUserIds.includes(uid));
+              if (updatedAssigned.length !== entryAssigned.length) {
+                await supabase
+                  .from("street_status_entries")
+                  .update({ assigned_users: updatedAssigned })
+                  .eq("id", entry.id);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error in fallback sync:", err);
     }
   };
 
@@ -523,12 +629,28 @@ export default function WorkHours({ userId, userName, role }: WorkHoursProps) {
     if (selectedLogIds.size === 0) return;
     
     const idsToDelete = Array.from(selectedLogIds);
+    
+    // Collect street/date combinations before deleting
+    const logsToDelete = workLogs.filter(log => idsToDelete.includes(log.id));
+    const streetDateCombos = new Map<string, { streetId: string; date: string; userId: string }>();
+    logsToDelete.forEach(log => {
+      if (log.street_id && log.date) {
+        const key = `${log.street_id}_${log.date}`;
+        streetDateCombos.set(key, { streetId: log.street_id, date: log.date, userId: log.user_id });
+      }
+    });
+    
     const { error } = await supabase
       .from("work_logs")
       .delete()
       .in("id", idsToDelete);
 
     if (!error) {
+      // Sync street statuses for all affected streets
+      for (const combo of streetDateCombos.values()) {
+        await syncStreetStatusAfterDelete(combo.streetId, combo.date, combo.userId);
+      }
+      
       fetchWorkLogs();
       setSelectedLogIds(new Set());
       setDeleteMultipleConfirm(false);
