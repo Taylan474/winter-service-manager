@@ -326,6 +326,56 @@
   letter-spacing: 0.5px;
 }
 
+.priority-badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.priority-badge.priority-1 {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.priority-badge.priority-2 {
+  background-color: #ea580c;
+  color: #ffffff;
+}
+
+.priority-badge.priority-3 {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
+.priority-badge.priority-4 {
+  background-color: #65a30d;
+  color: #ffffff;
+}
+
+.priority-badge.priority-5 {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.priority-select {
+  padding: 0.5rem 0.75rem;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.priority-select:hover,
+.priority-select:focus {
+  border-color: #646cff;
+  outline: none;
+}
+
 .add-bg-checkbox {
   display: flex;
   align-items: center;

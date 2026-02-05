@@ -189,15 +189,34 @@ export async function fetchStreetsWithCache(cityId: string, forceRefresh = false
     if (cached) return cached;
   }
   
-  const { data, error } = await supabase
+  // Try with priority field first, fallback without it if it doesn't exist
+  let data: any[] | null = null;
+  let error: any = null;
+  
+  ({ data, error } = await supabase
     .from('streets')
     .select(`
       id,
       name,
       isBG,
+      priority,
       area:areas(id, name)
     `)
-    .eq('city_id', cityId);
+    .eq('city_id', cityId));
+  
+  // If error (e.g., priority column doesn't exist), try without priority
+  if (error) {
+    console.warn('Streets query with priority failed, trying without:', error.message);
+    ({ data, error } = await supabase
+      .from('streets')
+      .select(`
+        id,
+        name,
+        isBG,
+        area:areas(id, name)
+      `)
+      .eq('city_id', cityId));
+  }
   
   if (error) {
     console.error('Error fetching streets:', error);

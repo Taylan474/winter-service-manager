@@ -207,7 +207,7 @@ function App() {
         <Route path="/" element={<Cities role={role} user={user} onLogout={handleLogout} />} />
         <Route path="/city/:citySlug" element={<Streets role={role} user={user} onLogout={handleLogout} />} />
         <Route path="/billing" element={<Billing role={role} userId={user.id} />} />
-        <Route path="/meine-stunden" element={<WorkHours userId={user.id} userName={userName || user.email} />} />
+        <Route path="/meine-stunden" element={<WorkHours userId={user.id} userName={userName || user.email} role={role} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

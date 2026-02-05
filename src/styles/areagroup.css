@@ -178,6 +178,35 @@
 
 .area-actions {
   margin-bottom: 1.2rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reorder-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background-color: #2a2a2a;
+  color: #888;
+  border: 1px solid #444;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.reorder-mode-btn:hover {
+  border-color: #646cff;
+  color: #646cff;
+}
+
+.reorder-mode-btn.active {
+  background-color: #646cff;
+  color: #ffffff;
+  border-color: #646cff;
 }
 
 .manage-streets-btn {

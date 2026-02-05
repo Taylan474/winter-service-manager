@@ -21,6 +21,7 @@ export default function DurationEntryModal({
 }: DurationEntryModalProps) {
   const [duration, setDuration] = useState<number>(30);
   const [durationInput, setDurationInput] = useState<string>("30");
+  const [customStartTime, setCustomStartTime] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -108,6 +109,33 @@ export default function DurationEntryModal({
     };
   };
 
+  // Calculate end time from custom start time + duration
+  const calculateEndTimeFromStart = (start: string, durationMinutes: number): string => {
+    const [startH, startM] = start.split(":").map(Number);
+    let endTotalMinutes = startH * 60 + startM + durationMinutes;
+    
+    // Handle overflow past midnight
+    if (endTotalMinutes >= 24 * 60) {
+      endTotalMinutes -= 24 * 60;
+    }
+
+    const endH = Math.floor(endTotalMinutes / 60);
+    const endM = endTotalMinutes % 60;
+    
+    return `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
+  };
+
+  // Get the actual times to use (custom or calculated)
+  const getActualTimes = (): { startTime: string; endTime: string } => {
+    if (customStartTime) {
+      return {
+        startTime: customStartTime,
+        endTime: calculateEndTimeFromStart(customStartTime, duration),
+      };
+    }
+    return calculateCleanTimes(duration);
+  };
+
   const handleSubmit = async () => {
     if (!currentUserId) {
       setError("Benutzer nicht angemeldet");
@@ -122,7 +150,7 @@ export default function DurationEntryModal({
     setIsSubmitting(true);
     setError(null);
 
-    const { startTime, endTime } = calculateCleanTimes(duration);
+    const { startTime, endTime } = getActualTimes();
 
     try {
       // Create work log entry for current user only (RLS allows only own entries)
@@ -153,7 +181,9 @@ export default function DurationEntryModal({
     }
   };
 
-  const { startTime, endTime } = calculateCleanTimes(duration);
+  const { endTime } = getActualTimes();
+  const defaultStartTime = calculateCleanTimes(duration).startTime;
+  const displayStartTime = customStartTime || defaultStartTime;
 
   return (
     <div className="duration-modal-overlay" onClick={onClose}>
@@ -211,9 +241,27 @@ export default function DurationEntryModal({
           </div>
 
           <div className="time-preview">
-            <div className="preview-row">
+            <div className="preview-row editable">
               <span className="preview-label">Startzeit:</span>
-              <span className="preview-value">{startTime}</span>
+              <input
+                type="time"
+                className="time-input"
+                value={displayStartTime}
+                onChange={(e) => setCustomStartTime(e.target.value)}
+              />
+              {customStartTime && (
+                <button
+                  type="button"
+                  className="reset-time-btn"
+                  onClick={() => setCustomStartTime("")}
+                  title="Auf jetzt zurücksetzen"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </button>
+              )}
             </div>
             <div className="preview-row">
               <span className="preview-label">Endzeit:</span>

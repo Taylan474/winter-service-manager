@@ -26,11 +26,27 @@ interface StreetRowProps {
   };
   role: UserRole;
   selectedDate: Date;
+  reorderMode?: boolean;
+  position?: number;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 // Component to display individual streets in the list and change their status
 // Supports multiple rounds per day (when it snows multiple times)
-export default function StreetRow({ street, role, selectedDate }: StreetRowProps) {
+export default function StreetRow({ 
+  street, 
+  role, 
+  selectedDate,
+  reorderMode,
+  position,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown
+}: StreetRowProps) {
   const [status, setStatus] = useState<StreetStatus | null>(null);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [assignedUsers, setAssignedUsers] = useState<string[]>([]);
@@ -265,6 +281,14 @@ export default function StreetRow({ street, role, selectedDate }: StreetRowProps
       setStartedAt(null);
       setFinishedAt(null);
       setAssignedUsers([]);
+      
+      // Auto-delete work log for this street/date/user when returning to offen
+      await supabase
+        .from("work_logs")
+        .delete()
+        .eq("street_id", street.id)
+        .eq("date", dateString)
+        .eq("user_id", currentUserId);
     }
 
     // Update main status table
@@ -416,8 +440,30 @@ export default function StreetRow({ street, role, selectedDate }: StreetRowProps
   };
 
   return (
-    <div className="street-row">
+    <div className={`street-row ${reorderMode ? 'reorder-mode' : ''}`}>
       <div className="street-info">
+        {/* Position indicator with reorder controls - only in reorder mode */}
+        {reorderMode && position !== undefined && (
+          <div className="street-position">
+            <button 
+              className="pos-arrow" 
+              onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+              disabled={!canMoveUp}
+              aria-label="Nach oben"
+            >
+              ▲
+            </button>
+            <span className="pos-number">{position}</span>
+            <button 
+              className="pos-arrow" 
+              onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+              disabled={!canMoveDown}
+              aria-label="Nach unten"
+            >
+              ▼
+            </button>
+          </div>
+        )}
         <div className="street-name-container">
           <strong className="street-name">{street.name}</strong>
           {FEATURE_FLAGS.enableBGFilter && street.isBG && <span className="bg-badge">BG</span>}

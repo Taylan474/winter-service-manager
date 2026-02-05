@@ -8,8 +8,10 @@ type UserRole = "admin" | "mitarbeiter" | "gast" | null;
 type AreaGroupProps = {
   area: any;
   streets: any[];
+  allAreaStreets: any[];
   cityId: string;
   onStreetAdded?: () => void;
+  onMoveStreet?: (streetId: string, direction: "up" | "down", areaStreets: any[]) => void;
   role: UserRole;
   selectedDate: Date;
 };
@@ -19,13 +21,16 @@ type AreaGroupProps = {
 export default function AreaGroup({
   area,
   streets,
+  allAreaStreets,
   cityId,
   onStreetAdded,
+  onMoveStreet,
   role,
   selectedDate,
 }: AreaGroupProps) {
   const [open, setOpen] = useState(false);
   const [showStreetManager, setShowStreetManager] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   // Toggle area open/close
   return (
@@ -97,6 +102,32 @@ export default function AreaGroup({
           ) : (
             <>
               <div className="area-actions">
+                {/* Reorder button for all users */}
+                {streets.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReorderMode(!reorderMode);
+                    }}
+                    className={`reorder-mode-btn ${reorderMode ? 'active' : ''}`}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <line x1="3" y1="12" x2="21" y2="12" />
+                      <line x1="3" y1="18" x2="21" y2="18" />
+                      <polyline points="7 3 10 6 7 9" />
+                      <polyline points="17 15 14 18 17 21" />
+                    </svg>
+                    {reorderMode ? 'Fertig' : 'Reihenfolge'}
+                  </button>
+                )}
                 {/* Only admin can manage streets */}
                 {role === "admin" && (
                   <button
@@ -122,12 +153,18 @@ export default function AreaGroup({
                 )}
               </div>
               <div className="streets-list">
-                {streets.map((street) => (
+                {streets.map((street, index) => (
                   <StreetRow 
                     key={street.id} 
                     street={street} 
                     role={role}
                     selectedDate={selectedDate}
+                    reorderMode={reorderMode}
+                    position={index + 1}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < streets.length - 1}
+                    onMoveUp={() => onMoveStreet?.(street.id, "up", allAreaStreets)}
+                    onMoveDown={() => onMoveStreet?.(street.id, "down", allAreaStreets)}
                   />
                 ))}
               </div>

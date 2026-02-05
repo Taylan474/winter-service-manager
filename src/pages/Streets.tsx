@@ -27,10 +27,78 @@ export default function Streets({ role, user }: StreetsProps) {
   const [streets, setStreets] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [showAreaManager, setShowAreaManager] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [streetStatuses, setStreetStatuses] = useState<Map<string, { status: string; assignedUsers: string[] }>>(new Map());
+  const [streetOrder, setStreetOrder] = useState<Map<string, number>>(new Map());
+
+  // Helper to normalize strings for search (removes hyphens, special chars)
+  const normalizeForSearch = (str: string) => {
+    return str.toLowerCase().replace(/[-_.,;:'"´`]/g, " ").replace(/\s+/g, " ").trim();
+  };
+
+  // Load personal street order from localStorage
+  const loadStreetOrder = useCallback(() => {
+    if (!user?.id || !city?.id) return;
+    const key = `streetOrder_${user.id}_${city.id}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setStreetOrder(new Map(Object.entries(parsed).map(([k, v]) => [k, v as number])));
+      } catch {
+        // Ignore invalid data
+      }
+    }
+  }, [user?.id, city?.id]);
+
+  // Save personal street order to localStorage
+  const saveStreetOrder = useCallback((order: Map<string, number>) => {
+    if (!user?.id || !city?.id) return;
+    const key = `streetOrder_${user.id}_${city.id}`;
+    const obj: Record<string, number> = {};
+    order.forEach((v, k) => { obj[k] = v; });
+    localStorage.setItem(key, JSON.stringify(obj));
+  }, [user?.id, city?.id]);
+
+  // Move a street up or down in the personal order
+  const moveStreet = useCallback((streetId: string, direction: "up" | "down", areaStreets: any[]) => {
+    const currentOrder = new Map(streetOrder);
+    
+    // Find current positions
+    const sortedStreets = [...areaStreets].sort((a, b) => {
+      const orderA = currentOrder.get(a.id) ?? 999999;
+      const orderB = currentOrder.get(b.id) ?? 999999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name, 'de');
+    });
+    
+    const idx = sortedStreets.findIndex(s => s.id === streetId);
+    if (idx === -1) return;
+    
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sortedStreets.length) return;
+    
+    // Swap positions
+    const currentStreet = sortedStreets[idx];
+    const targetStreet = sortedStreets[targetIdx];
+    
+    // Assign new order values
+    sortedStreets.forEach((s, i) => {
+      if (s.id === currentStreet.id) {
+        currentOrder.set(s.id, targetIdx);
+      } else if (s.id === targetStreet.id) {
+        currentOrder.set(s.id, idx);
+      } else {
+        currentOrder.set(s.id, i);
+      }
+    });
+    
+    setStreetOrder(currentOrder);
+    saveStreetOrder(currentOrder);
+  }, [streetOrder, saveStreetOrder]);
 
   // Load city by name (slug) from URL - uses cache
   const fetchCity = useCallback(async () => {
@@ -107,8 +175,9 @@ export default function Streets({ role, user }: StreetsProps) {
   useEffect(() => {
     if (city) {
       fetchStreetsAndAreas();
+      loadStreetOrder();
     }
-  }, [city?.id, fetchStreetsAndAreas]);
+  }, [city?.id, fetchStreetsAndAreas, loadStreetOrder]);
 
   // Load status when date or city changes
   useEffect(() => {
@@ -173,15 +242,26 @@ export default function Streets({ role, user }: StreetsProps) {
       supabase.removeChannel(channel).catch(console.error);
     };
   }, [city?.id, selectedDate, fetchStreetStatuses]);
-// Filter streets by filter type
+// Filter streets by filter type and search query
   
   const filterStreets = (areaStreets: any[]) => {
     let filtered = areaStreets;
     
-    if (filter === "bg") filtered = areaStreets.filter((s) => s.isBG === true);
-    else if (filter === "private") filtered = areaStreets.filter((s) => s.isBG === false);
+    // Apply search filter first (with flexible matching ignoring hyphens/special chars)
+    if (searchQuery.trim()) {
+      const normalizedQuery = normalizeForSearch(searchQuery);
+      filtered = filtered.filter((s) => {
+        const normalizedName = normalizeForSearch(s.name);
+        // Match if normalized name contains normalized query OR exact match
+        return normalizedName.includes(normalizedQuery) || 
+               s.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+      });
+    }
+    
+    if (filter === "bg") filtered = filtered.filter((s) => s.isBG === true);
+    else if (filter === "private") filtered = filtered.filter((s) => s.isBG === false);
     else if (filter === "offen") {
-      filtered = areaStreets.filter((s) => {
+      filtered = filtered.filter((s) => {
         const statusData = streetStatuses.get(s.id);
         const status = statusData?.status;
         // If no status exists or status is "offen" or "auf_dem_weg", show it
@@ -189,13 +269,13 @@ export default function Streets({ role, user }: StreetsProps) {
       });
     }
     else if (filter === "erledigt") {
-      filtered = areaStreets.filter((s) => {
+      filtered = filtered.filter((s) => {
         const statusData = streetStatuses.get(s.id);
         return statusData?.status === "erledigt";
       });
     }
     else if (filter === "meine_erledigt") {
-      filtered = areaStreets.filter((s) => {
+      filtered = filtered.filter((s) => {
         const statusData = streetStatuses.get(s.id);
         // Show if status is erledigt AND current user is in assigned_users
         return statusData?.status === "erledigt" && 
@@ -204,8 +284,13 @@ export default function Streets({ role, user }: StreetsProps) {
       });
     }
     
-    // Sort alphabetically by name
-    return filtered.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    // Sort by personal order (if set), then alphabetically by name
+    return filtered.sort((a, b) => {
+      const orderA = streetOrder.get(a.id) ?? 999999;
+      const orderB = streetOrder.get(b.id) ?? 999999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name, 'de');
+    });
   };
 
   // Loading state while city is being loaded
@@ -261,6 +346,43 @@ export default function Streets({ role, user }: StreetsProps) {
           selectedDate={selectedDate} 
           onDateChange={setSelectedDate} 
         />
+
+        {/* Search Bar */}
+        <div className="street-search">
+          <div className="search-input-wrapper">
+            <svg
+              className="search-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Straße suchen..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button
+                className="clear-search-btn"
+                onClick={() => setSearchQuery("")}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
 
         <div className="streets-controls">
           <div className="filter-group">
@@ -358,7 +480,8 @@ export default function Streets({ role, user }: StreetsProps) {
               );
               const filteredStreets = filterStreets(areaStreets);
 
-              if (filteredStreets.length === 0 && filter !== "all") {
+              // Hide areas with no matching streets when filtering or searching
+              if (filteredStreets.length === 0 && (filter !== "all" || searchQuery.trim())) {
                 return null;
               }
 
@@ -367,8 +490,10 @@ export default function Streets({ role, user }: StreetsProps) {
                   key={areaObj.id}
                   area={areaObj}
                   streets={filteredStreets}
+                  allAreaStreets={areaStreets}
                   cityId={city.id}
                   onStreetAdded={refreshData}
+                  onMoveStreet={moveStreet}
                   role={role}
                   selectedDate={selectedDate}
                 />

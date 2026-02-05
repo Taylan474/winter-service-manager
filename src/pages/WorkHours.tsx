@@ -26,6 +26,12 @@ interface WorkLog {
 interface WorkHoursProps {
   userId: string;
   userName?: string;
+  role?: "admin" | "mitarbeiter" | "gast" | null;
+}
+
+interface Employee {
+  id: string;
+  name: string;
 }
 
 type ViewMode = "day" | "week" | "month";
@@ -56,12 +62,14 @@ const calculateDurationMinutes = (startTime: string, endTime: string): number =>
   return diff;
 };
 
-export default function WorkHours({ userId, userName }: WorkHoursProps) {
+export default function WorkHours({ userId, userName, role }: WorkHoursProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("add");
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
   const [streets, setStreets] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [areas, setAreas] = useState<any[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string>("");
   const [selectedAreaId, setSelectedAreaId] = useState<string>("");
@@ -258,16 +266,41 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
     }
   }, []);
 
+  // Fetch employees for admin view
+  const fetchEmployees = useCallback(async () => {
+    if (role !== "admin") return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, name")
+        .neq("role", "gast")
+        .order("name");
+      
+      if (error) {
+        console.error("Fehler beim Laden der Mitarbeiter:", error);
+        return;
+      }
+      
+      setEmployees(data ?? []);
+    } catch (err) {
+      console.error("Fehler beim Laden der Mitarbeiter:", err);
+    }
+  }, [role]);
+
   // Fetch work logs for view
   const fetchWorkLogs = useCallback(async () => {
     setIsLoading(true);
     const dateString = selectedDate.toISOString().split("T")[0];
     
+    // Determine which user's logs to fetch
+    const targetUserId = (role === "admin" && selectedEmployeeId) ? selectedEmployeeId : userId;
+    
     try {
       let query = supabase
         .from("work_logs")
         .select(`*, street:streets(name, isBG, city:cities(name))`)
-        .eq("user_id", userId);
+        .eq("user_id", targetUserId);
 
       if (viewMode === "day") {
         query = query.eq("date", dateString);
@@ -303,11 +336,18 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, viewMode, userId, getWeekBounds, getMonthBounds]);
+  }, [selectedDate, viewMode, userId, role, selectedEmployeeId, getWeekBounds, getMonthBounds]);
 
   useEffect(() => {
     fetchCities();
   }, [fetchCities]);
+
+  // Fetch employees for admin view
+  useEffect(() => {
+    if (role === "admin") {
+      fetchEmployees();
+    }
+  }, [role, fetchEmployees]);
 
   // When selectedCityId changes, fetch areas
   useEffect(() => {
@@ -651,6 +691,11 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    // Use selected employee's name when admin is viewing their logs
+    const displayName = (role === "admin" && selectedEmployeeId)
+      ? employees.find(e => e.id === selectedEmployeeId)?.name || "Mitarbeiter"
+      : userName || "Mitarbeiter";
+
     let dateString = "";
     if (viewMode === "day") {
       dateString = selectedDate.toLocaleDateString("de-DE", {
@@ -672,7 +717,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Arbeitsstunden - ${userName || "Mitarbeiter"}</title>
+        <title>Arbeitsstunden - ${displayName}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -842,7 +887,7 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
           <div class="header-info">
             <div class="info-item">
               <span class="info-label">Mitarbeiter</span>
-              <span class="info-value">${userName || "Unbekannt"}</span>
+              <span class="info-value">${displayName}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Zeitraum</span>
@@ -1266,7 +1311,12 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
         {activeTab === "list" && (
           <div className="manager-section">
             <div className="manager-header">
-              <h2>Alle Einträge ({filteredStats.entryCount}{bgFilter !== "all" ? ` von ${workLogs.length}` : ""})</h2>
+              <h2>
+                {role === "admin" && selectedEmployeeId 
+                  ? `Einträge von ${employees.find(e => e.id === selectedEmployeeId)?.name || "Mitarbeiter"}` 
+                  : "Alle Einträge"
+                } ({filteredStats.entryCount}{bgFilter !== "all" ? ` von ${workLogs.length}` : ""})
+              </h2>
               <div className="header-actions">
                 {selectedLogIds.size > 0 && (
                   <button
@@ -1291,6 +1341,24 @@ export default function WorkHours({ userId, userName }: WorkHoursProps) {
                 )}
               </div>
             </div>
+
+            {/* Admin Employee Selector */}
+            {role === "admin" && employees.length > 0 && (
+              <div className="employee-selector">
+                <label>Mitarbeiter anzeigen:</label>
+                <select
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                >
+                  <option value="">Meine Einträge</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}{emp.id === userId ? " (ich)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Date Navigation */}
             <div className="date-navigation compact">

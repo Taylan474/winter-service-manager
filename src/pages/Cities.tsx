@@ -24,6 +24,7 @@ type CitiesProps = {
 export default function Cities({ role: parentRole, user, onLogout }: CitiesProps) {
   const navigate = useNavigate();
   const [cities, setCities] = useState<any[]>([]);
+  const [cityStats, setCityStats] = useState<Map<string, { total: number; completed: number }>>(new Map());
   const [showManager, setShowManager] = useState(false);
   const [showUsersManager, setShowUsersManager] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -77,6 +78,48 @@ export default function Cities({ role: parentRole, user, onLogout }: CitiesProps
     await fetchCities(true);
   }, [fetchCities]);
 
+  // Fetch today's progress stats for all cities
+  const fetchCityStats = useCallback(async () => {
+    if (cities.length === 0) return;
+    
+    const today = new Date().toISOString().split("T")[0];
+    const statsMap = new Map<string, { total: number; completed: number }>();
+    
+    // Get all streets grouped by city
+    const { data: streetsData } = await supabase
+      .from("streets")
+      .select("id, city_id");
+    
+    if (!streetsData) return;
+    
+    // Count total streets per city
+    const cityStreetCounts = new Map<string, string[]>();
+    streetsData.forEach((street) => {
+      const existing = cityStreetCounts.get(street.city_id) || [];
+      existing.push(street.id);
+      cityStreetCounts.set(street.city_id, existing);
+    });
+    
+    // Get today's completed statuses
+    const { data: statusData } = await supabase
+      .from("daily_street_status")
+      .select("street_id, status")
+      .eq("date", today)
+      .eq("status", "erledigt");
+    
+    const completedStreetIds = new Set(statusData?.map(s => s.street_id) || []);
+    
+    // Calculate stats per city
+    cities.forEach((city) => {
+      const cityStreetIds = cityStreetCounts.get(city.id) || [];
+      const total = cityStreetIds.length;
+      const completed = cityStreetIds.filter(id => completedStreetIds.has(id)).length;
+      statsMap.set(city.id, { total, completed });
+    });
+    
+    setCityStats(statsMap);
+  }, [cities]);
+
   useEffect(() => {
     // Load data in parallel - no delay needed thanks to cache
     const loadData = async () => {
@@ -99,6 +142,32 @@ export default function Cities({ role: parentRole, user, onLogout }: CitiesProps
       setRole(parentRole);
     }
   }, [parentRole]);
+
+  // Fetch city stats when cities are loaded
+  useEffect(() => {
+    if (cities.length > 0 && role !== "gast") {
+      fetchCityStats();
+    }
+  }, [cities, role, fetchCityStats]);
+
+  // Listen for real-time status updates to refresh stats
+  useEffect(() => {
+    if (role === "gast") return;
+    
+    const channel = supabase
+      .channel("status-changes-home")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_street_status" },
+        () => {
+          fetchCityStats();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchCityStats, role]);
 
   // Listen for real-time city updates
   useEffect(() => {
@@ -313,21 +382,42 @@ export default function Cities({ role: parentRole, user, onLogout }: CitiesProps
                     )}
                   </div>
                 ) : (
-                  cities.map((city) => (
-                    <div key={city.id} className="city-card" onClick={() => navigate(`/city/${encodeURIComponent(city.name.trim().toLowerCase())}`)}>
-                      <svg className="city-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 21h18" />
-                        <path d="M9 8h1" />
-                        <path d="M9 12h1" />
-                        <path d="M9 16h1" />
-                        <path d="M14 8h1" />
-                        <path d="M14 12h1" />
-                        <path d="M14 16h1" />
-                        <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
-                      </svg>
-                      <h3>{city.name.trim()}</h3>
-                    </div>
-                  ))
+                  cities.map((city) => {
+                    const stats = cityStats.get(city.id);
+                    const progressPercent = stats && stats.total > 0 
+                      ? Math.round((stats.completed / stats.total) * 100) 
+                      : 0;
+                    
+                    return (
+                      <div key={city.id} className="city-card" onClick={() => navigate(`/city/${encodeURIComponent(city.name.trim().toLowerCase())}`)}>
+                        <svg className="city-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 21h18" />
+                          <path d="M9 8h1" />
+                          <path d="M9 12h1" />
+                          <path d="M9 16h1" />
+                          <path d="M14 8h1" />
+                          <path d="M14 12h1" />
+                          <path d="M14 16h1" />
+                          <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
+                        </svg>
+                        <h3>{city.name.trim()}</h3>
+                        
+                        {stats && stats.total > 0 && (
+                          <div className="city-stats">
+                            <div className="city-progress-bar">
+                              <div 
+                                className="city-progress-fill" 
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                            <span className="city-progress-text">
+                              {stats.completed}/{stats.total} erledigt
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}

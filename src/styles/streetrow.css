@@ -34,6 +34,62 @@
   font-weight: 600;
 }
 
+/* Position indicator with up/down controls */
+.street-position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 36px;
+  margin-right: 12px;
+  background: rgba(100, 108, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.pos-number {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #646cff;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-arrow {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.pos-arrow:hover:not(:disabled) {
+  color: #646cff;
+  background: rgba(100, 108, 255, 0.25);
+}
+
+.pos-arrow:active:not(:disabled) {
+  transform: scale(0.85);
+}
+
+.pos-arrow:disabled {
+  color: #444;
+  cursor: default;
+}
+
+/* Reorder mode visual feedback */
+.street-row.reorder-mode {
+  border-color: #646cff;
+  background-color: #252538;
+}
+
 .bg-badge {
   background-color: #646cff;
   color: #ffffff;
