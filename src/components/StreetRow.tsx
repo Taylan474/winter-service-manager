@@ -629,6 +629,7 @@ export default function StreetRow({
           streetName={street.name}
           streetId={street.id}
           date={dateString}
+          assignedUsers={assignedUsers}
           onClose={() => setShowDurationModal(false)}
           onSuccess={async (startTimeStr, endTimeStr) => {
             setShowDurationModal(false);

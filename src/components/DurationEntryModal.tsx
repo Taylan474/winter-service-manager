@@ -6,16 +6,18 @@ interface DurationEntryModalProps {
   streetName: string;
   streetId: string;
   date: string; // YYYY-MM-DD format
+  assignedUsers: string[]; // All users assigned to this street
   onClose: () => void;
   onSuccess: (startTime: string, endTime: string) => void;
 }
 
 // Modal for entering work duration after marking a street as completed
-// Creates a work log entry for the current user only (RLS restriction)
+// Creates work log entries for ALL assigned users
 export default function DurationEntryModal({
   streetName,
   streetId,
   date,
+  assignedUsers,
   onClose,
   onSuccess,
 }: DurationEntryModalProps) {
@@ -153,23 +155,42 @@ export default function DurationEntryModal({
     const { startTime, endTime } = getActualTimes();
 
     try {
-      // Create work log entry for current user only (RLS allows only own entries)
-      const { error: insertError } = await supabase
-        .from("work_logs")
-        .insert({
-          user_id: currentUserId,
-          street_id: streetId,
-          date: date,
-          start_time: startTime,
-          end_time: endTime,
-          notes: `Auto-erstellt für ${streetName}`,
-        });
+      // Ensure current user is included in the list
+      const usersToLog = assignedUsers.includes(currentUserId) 
+        ? assignedUsers 
+        : [currentUserId, ...assignedUsers];
 
-      if (insertError) {
-        console.error("Error inserting work log:", insertError);
-        setError(`Fehler: ${insertError.message || insertError.code || "Unbekannter Fehler"}`);
-        setIsSubmitting(false);
-        return;
+      // Try to create work logs for all assigned users using RPC function
+      const { error: rpcError } = await supabase.rpc('create_team_work_logs', {
+        p_street_id: streetId,
+        p_date: date,
+        p_start_time: startTime,
+        p_end_time: endTime,
+        p_user_ids: usersToLog,
+        p_notes: `Auto-erstellt für ${streetName}`,
+      });
+
+      if (rpcError) {
+        // RPC function might not exist yet - fall back to inserting just for current user
+        console.warn("RPC failed, falling back to single insert:", rpcError.message);
+        
+        const { error: insertError } = await supabase
+          .from("work_logs")
+          .insert({
+            user_id: currentUserId,
+            street_id: streetId,
+            date: date,
+            start_time: startTime,
+            end_time: endTime,
+            notes: `Auto-erstellt für ${streetName}`,
+          });
+
+        if (insertError) {
+          console.error("Error inserting work log:", insertError);
+          setError(`Fehler: ${insertError.message || insertError.code || "Unbekannter Fehler"}`);
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       onSuccess(startTime, endTime);

@@ -26,8 +26,8 @@ export default function TouchTimePicker({ value, onChange, label }: TouchTimePic
   });
   const [step, setStep] = useState<"hour" | "minute">("hour");
 
-  // Hours 02-18 only (work hours)
-  const HOURS = Array.from({ length: 17 }, (_, i) => i + 2);
+  // Hours 01-21 only (work hours: 1am to 9pm)
+  const HOURS = Array.from({ length: 21 }, (_, i) => i + 1);
   const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
   const formatHour = (h: number) => h.toString().padStart(2, "0");
