@@ -5,11 +5,7 @@ import "../styles/areagroup.css";
 
 type UserRole = "admin" | "mitarbeiter" | "gast" | null;
 
-interface Street {
-  id: string;
-  name: string;
-  [key: string]: any;
-}
+import type { Street } from "../types/street";
 
 type AreaGroupProps = {
   area: any;

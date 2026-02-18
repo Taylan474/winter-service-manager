@@ -1,15 +1,11 @@
 import { useState } from "react";
+
 import { supabase } from "../lib/supabase";
 import { FEATURE_FLAGS } from "../lib/company-config";
 import ConfirmModal from "./ConfirmModal";
 import AlertModal from "./AlertModal";
 import "../styles/manager.css";
-
-type Street = {
-  id: string;
-  name: string;
-  isBG: boolean;
-};
+import type { Street } from "../types/street";
 
 type StreetManagerProps = {
   streets: Street[];

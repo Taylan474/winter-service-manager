@@ -19,15 +19,9 @@ type StreetsProps = {
   onLogout: () => Promise<void>;
 };
 
-type FilterType = "all" | "private" | "bg" | "offen" | "erledigt" | "meine_erledigt";
+import type { Street } from "../types/street";
 
-interface Street {
-  id: string;
-  name: string;
-  area?: { id: string };
-  isBG?: boolean;
-  [key: string]: any;
-}
+type FilterType = "all" | "private" | "bg" | "offen" | "erledigt" | "meine_erledigt";
 
 // Streets page for a selected city. Displays areas, DatePicker calendar, filter options for Private/BG and area management.
 export default function Streets({ role, user }: StreetsProps) {
