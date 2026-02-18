@@ -5,15 +5,27 @@ import "../styles/areagroup.css";
 
 type UserRole = "admin" | "mitarbeiter" | "gast" | null;
 
+interface Street {
+  id: string;
+  name: string;
+  [key: string]: any;
+}
+
 type AreaGroupProps = {
   area: any;
-  streets: any[];
-  allAreaStreets: any[];
+  streets: Street[];
+  allAreaStreets: Street[];
   cityId: string;
   onStreetAdded?: () => void;
   onMoveStreet?: (streetId: string, direction: "up" | "down", areaStreets: any[]) => void;
   role: UserRole;
   selectedDate: Date;
+  // Multi-select props
+  multiSelectMode?: boolean;
+  selectedStreetIds?: Set<string>;
+  onToggleStreetSelection?: (streetId: string) => void;
+  onSelectAllInArea?: (streetIds: string[]) => void;
+  onDeselectAllInArea?: (streetIds: string[]) => void;
 };
 
 
@@ -27,15 +39,58 @@ export default function AreaGroup({
   onMoveStreet,
   role,
   selectedDate,
+  multiSelectMode = false,
+  selectedStreetIds = new Set(),
+  onToggleStreetSelection,
+  onSelectAllInArea,
+  onDeselectAllInArea,
 }: AreaGroupProps) {
   const [open, setOpen] = useState(false);
   const [showStreetManager, setShowStreetManager] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
 
+  // Check if all streets in this area are selected
+  const allSelected = streets.length > 0 && streets.every(s => selectedStreetIds.has(s.id));
+  const someSelected = streets.some(s => selectedStreetIds.has(s.id));
+
+  // Handle area checkbox click
+  const handleAreaCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (allSelected) {
+      onDeselectAllInArea?.(streets.map(s => s.id));
+    } else {
+      onSelectAllInArea?.(streets.map(s => s.id));
+    }
+  };
+
+  // Handle street row click in multi-select mode
+  const handleStreetClick = (streetId: string) => {
+    if (multiSelectMode) {
+      onToggleStreetSelection?.(streetId);
+    }
+  };
+
   // Toggle area open/close
   return (
-    <div className="area-group">
+    <div className={`area-group ${multiSelectMode ? 'multi-select-mode' : ''}`}>
       <div className="area-header" onClick={() => setOpen((o) => !o)}>
+        {/* Area selection checkbox in multi-select mode */}
+        {multiSelectMode && (
+          <div 
+            className={`area-checkbox ${allSelected ? 'checked' : someSelected ? 'partial' : ''}`}
+            onClick={handleAreaCheckboxClick}
+          >
+            {allSelected ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : someSelected ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            ) : null}
+          </div>
+        )}
         <div className="area-title">
           <svg
             className={`chevron ${open ? "open" : ""}`}
@@ -50,7 +105,12 @@ export default function AreaGroup({
           </svg>
           <h3>{area.name}</h3>
         </div>
-        <span className="street-count">{streets.length} Straße(n)</span>
+        <span className="street-count">
+          {multiSelectMode && someSelected && (
+            <span className="selected-count">{streets.filter(s => selectedStreetIds.has(s.id)).length}/</span>
+          )}
+          {streets.length} Straße(n)
+        </span>
       </div>
 
       {open && (
@@ -154,18 +214,33 @@ export default function AreaGroup({
               </div>
               <div className="streets-list">
                 {streets.map((street, index) => (
-                  <StreetRow 
+                  <div 
                     key={street.id} 
-                    street={street} 
-                    role={role}
-                    selectedDate={selectedDate}
-                    reorderMode={reorderMode}
-                    position={index + 1}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < streets.length - 1}
-                    onMoveUp={() => onMoveStreet?.(street.id, "up", allAreaStreets)}
-                    onMoveDown={() => onMoveStreet?.(street.id, "down", allAreaStreets)}
-                  />
+                    className={`street-row-wrapper ${multiSelectMode ? 'selectable' : ''} ${selectedStreetIds.has(street.id) ? 'selected' : ''}`}
+                    onClick={() => handleStreetClick(street.id)}
+                  >
+                    {multiSelectMode && (
+                      <div className={`street-checkbox ${selectedStreetIds.has(street.id) ? 'checked' : ''}`}>
+                        {selectedStreetIds.has(street.id) && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                    )}
+                    <StreetRow 
+                      street={street} 
+                      role={role}
+                      selectedDate={selectedDate}
+                      reorderMode={reorderMode && !multiSelectMode}
+                      position={index + 1}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < streets.length - 1}
+                      onMoveUp={() => onMoveStreet?.(street.id, "up", allAreaStreets)}
+                      onMoveDown={() => onMoveStreet?.(street.id, "down", allAreaStreets)}
+                      disabled={multiSelectMode}
+                    />
+                  </div>
                 ))}
               </div>
             </>

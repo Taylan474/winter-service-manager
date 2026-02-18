@@ -304,3 +304,116 @@
     gap: 0.5rem;
   }
 }
+
+/* Multi-select mode styles */
+.area-group.multi-select-mode .area-header {
+  gap: 0.75rem;
+}
+
+.area-checkbox {
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.area-checkbox:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.area-checkbox.checked {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.area-checkbox.checked svg {
+  color: #000;
+}
+
+.area-checkbox.partial {
+  background: rgba(245, 158, 11, 0.3);
+  border-color: #f59e0b;
+}
+
+.area-checkbox.partial svg {
+  color: #f59e0b;
+}
+
+.street-count .selected-count {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+/* Street row wrapper for multi-select */
+.street-row-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.25rem;
+  border-radius: 10px;
+  transition: all 0.15s;
+}
+
+.street-row-wrapper.selectable {
+  cursor: pointer;
+}
+
+.street-row-wrapper.selectable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.street-row-wrapper.selected {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  margin: -1px;
+}
+
+.street-row-wrapper > .street-row {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Street checkbox */
+.street-checkbox {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  margin-top: 0.5rem;
+}
+
+.street-row-wrapper.selectable:hover .street-checkbox {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.street-checkbox.checked {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.street-checkbox.checked svg {
+  color: #000;
+}
+
+/* Disable pointer events on street row controls in multi-select mode */
+.street-row-wrapper.selectable .street-row .status-select,
+.street-row-wrapper.selectable .street-row .new-round-btn,
+.street-row-wrapper.selectable .street-row .user-checkbox {
+  pointer-events: none;
+  opacity: 0.6;
+}

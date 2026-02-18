@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { formatTimestamp } from "../lib/locale-config";
 import { FEATURE_FLAGS } from "../lib/company-config";
 import AlertModal from "./AlertModal";
-import DurationEntryModal from "./DurationEntryModal";
+import TeamCompletionModal from "./TeamCompletionModal";
 import "../styles/streetrow.css";
 
 type StreetStatus = "offen" | "auf_dem_weg" | "erledigt";
@@ -32,6 +32,7 @@ interface StreetRowProps {
   canMoveDown?: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  disabled?: boolean; // When true, status changes are disabled (e.g., in multi-select mode)
 }
 
 // Component to display individual streets in the list and change their status
@@ -45,7 +46,8 @@ export default function StreetRow({
   canMoveUp,
   canMoveDown,
   onMoveUp,
-  onMoveDown
+  onMoveDown,
+  disabled = false
 }: StreetRowProps) {
   const [status, setStatus] = useState<StreetStatus | null>(null);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
@@ -57,7 +59,7 @@ export default function StreetRow({
   const [statusHistory, setStatusHistory] = useState<StatusEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [alertModal, setAlertModal] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
-  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [showTeamCompletionModal, setShowTeamCompletionModal] = useState(false);
 
   const dateString = selectedDate.toISOString().split("T")[0];
 
@@ -369,9 +371,9 @@ export default function StreetRow({
     setStatus(newStatus);
     saveStreetStatus(newStatus, assignedUsers);
 
-    // Show duration modal when marking as completed
+    // Show team completion modal when marking as completed
     if (newStatus === "erledigt") {
-      setShowDurationModal(true);
+      setShowTeamCompletionModal(true);
     }
   };
 
@@ -480,8 +482,8 @@ export default function StreetRow({
               <select
                 value={status}
                 onChange={(e) => updateStatus(e.target.value as StreetStatus)}
-                className={`status-select status-${status} ${role === "gast" ? "disabled" : ""}`}
-                disabled={role === "gast"}
+                className={`status-select status-${status} ${role === "gast" || disabled ? "disabled" : ""}`}
+                disabled={role === "gast" || disabled}
               >
                 <option value="offen">Offen</option>
                 <option value="auf_dem_weg">Auf dem Weg</option>
@@ -491,7 +493,7 @@ export default function StreetRow({
             </div>
             
             {/* Button for new round when status is done */}
-            {status === "erledigt" && role !== "gast" && (
+            {status === "erledigt" && role !== "gast" && !disabled && (
               <button 
                 className="new-round-btn"
                 onClick={startNewRound}
@@ -624,20 +626,23 @@ export default function StreetRow({
         />
       )}
 
-      {showDurationModal && (
-        <DurationEntryModal
-          streetName={street.name}
-          streetId={street.id}
+      {showTeamCompletionModal && currentUserId && (
+        <TeamCompletionModal
+          streets={[{ id: street.id, name: street.name }]}
           date={dateString}
-          assignedUsers={assignedUsers}
-          onClose={() => setShowDurationModal(false)}
-          onSuccess={async (startTimeStr, endTimeStr) => {
-            setShowDurationModal(false);
+          currentUserId={currentUserId}
+          preSelectedUsers={assignedUsers}
+          onClose={() => setShowTeamCompletionModal(false)}
+          onSuccess={async (streetTimes) => {
+            setShowTeamCompletionModal(false);
             
-            // Update street status with the clean times from the work log
+            // Get times for this street
+            const times = streetTimes.get(street.id);
+            if (!times) return;
+            
             // Convert HH:MM to full timestamp using the selected date
-            const startTimestamp = new Date(`${dateString}T${startTimeStr}:00`).toISOString();
-            const endTimestamp = new Date(`${dateString}T${endTimeStr}:00`).toISOString();
+            const startTimestamp = new Date(`${dateString}T${times.startTime}:00`).toISOString();
+            const endTimestamp = new Date(`${dateString}T${times.endTime}:00`).toISOString();
             
             // Update local state immediately
             setStartedAt(startTimestamp);

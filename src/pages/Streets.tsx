@@ -7,6 +7,8 @@ import AreaGroup from "../components/AreaGroup";
 import AreaManager from "../components/AreaManager";
 import DatePicker from "../components/DatePicker";
 import Footer from "../components/Footer"; 
+import TeamCompletionModal from "../components/TeamCompletionModal";
+import BatchStartModal from "../components/BatchStartModal";
 import "../styles/streets.css";
 
 type UserRole = "admin" | "mitarbeiter" | "gast" | null;
@@ -19,12 +21,20 @@ type StreetsProps = {
 
 type FilterType = "all" | "private" | "bg" | "offen" | "erledigt" | "meine_erledigt";
 
+interface Street {
+  id: string;
+  name: string;
+  area?: { id: string };
+  isBG?: boolean;
+  [key: string]: any;
+}
+
 // Streets page for a selected city. Displays areas, DatePicker calendar, filter options for Private/BG and area management.
 export default function Streets({ role, user }: StreetsProps) {
   const { citySlug } = useParams<{ citySlug: string }>();
   const navigate = useNavigate();
   const [city, setCity] = useState<any | null>(null);
-  const [streets, setStreets] = useState<any[]>([]);
+  const [streets, setStreets] = useState<Street[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -33,6 +43,22 @@ export default function Streets({ role, user }: StreetsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [streetStatuses, setStreetStatuses] = useState<Map<string, { status: string; assignedUsers: string[] }>>(new Map());
   const [streetOrder, setStreetOrder] = useState<Map<string, number>>(new Map());
+  
+  // Multi-select mode state
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedStreetIds, setSelectedStreetIds] = useState<Set<string>>(new Set());
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchAction, setBatchAction] = useState<"erledigt" | "auf_dem_weg" | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Get current user ID
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) setCurrentUserId(data.user.id);
+    };
+    getCurrentUser();
+  }, []);
 
   // Helper to normalize strings for search (removes hyphens, special chars)
   const normalizeForSearch = (str: string) => {
@@ -165,6 +191,133 @@ export default function Streets({ role, user }: StreetsProps) {
       await fetchStreetsAndAreas(true);
     }
   }, [city?.id, fetchStreetsAndAreas]);
+
+  // Multi-select functions
+  const toggleStreetSelection = useCallback((streetId: string) => {
+    setSelectedStreetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(streetId)) {
+        next.delete(streetId);
+      } else {
+        next.add(streetId);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAllInArea = useCallback((streetIds: string[]) => {
+    setSelectedStreetIds(prev => {
+      const next = new Set(prev);
+      streetIds.forEach(id => next.add(id));
+      return next;
+    });
+  }, []);
+
+  const deselectAllInArea = useCallback((streetIds: string[]) => {
+    setSelectedStreetIds(prev => {
+      const next = new Set(prev);
+      streetIds.forEach(id => next.delete(id));
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedStreetIds(new Set());
+    setMultiSelectMode(false);
+  }, []);
+
+  const toggleMultiSelectMode = useCallback(() => {
+    if (multiSelectMode) {
+      // Exiting multi-select mode - clear selection
+      setSelectedStreetIds(new Set());
+    }
+    setMultiSelectMode(prev => !prev);
+  }, [multiSelectMode]);
+
+  // Handle batch status change
+  const handleBatchStatusChange = useCallback(async (action: "erledigt" | "auf_dem_weg" | "offen") => {
+    if (selectedStreetIds.size === 0) return;
+    
+    if (action === "offen") {
+      // Reset to offen - no modal needed, just update directly
+      const dateString = selectedDate.toISOString().split("T")[0];
+      const now = new Date().toISOString();
+      
+      for (const streetId of selectedStreetIds) {
+        // Update status
+        await supabase
+          .from("daily_street_status")
+          .upsert({
+            street_id: streetId,
+            date: dateString,
+            status: "offen",
+            started_at: null,
+            finished_at: null,
+            assigned_users: [],
+            changed_by: currentUserId,
+            updated_at: now,
+          }, { onConflict: "street_id,date" });
+        
+        // Delete work logs for this street/date
+        await supabase
+          .from("work_logs")
+          .delete()
+          .eq("street_id", streetId)
+          .eq("date", dateString);
+      }
+      
+      clearSelection();
+      fetchStreetStatuses();
+    } else if (currentUserId) {
+      // Show modal for erledigt and auf_dem_weg (team selection)
+      setBatchAction(action);
+      setShowBatchModal(true);
+    }
+  }, [selectedStreetIds, currentUserId, selectedDate, clearSelection, fetchStreetStatuses]);
+
+  // Handle batch completion from modal
+  const handleBatchCompletion = useCallback(async (streetTimes: Map<string, { startTime: string; endTime: string }>) => {
+    const dateString = selectedDate.toISOString().split("T")[0];
+    
+    // Update each street's status
+    for (const [streetId, times] of streetTimes) {
+      const startTimestamp = new Date(`${dateString}T${times.startTime}:00`).toISOString();
+      const endTimestamp = new Date(`${dateString}T${times.endTime}:00`).toISOString();
+      
+      await supabase
+        .from("daily_street_status")
+        .upsert({
+          street_id: streetId,
+          date: dateString,
+          status: "erledigt",
+          started_at: startTimestamp,
+          finished_at: endTimestamp,
+          changed_by: currentUserId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "street_id,date" });
+    }
+    
+    setShowBatchModal(false);
+    setBatchAction(null);
+    clearSelection();
+    fetchStreetStatuses();
+  }, [selectedDate, currentUserId, clearSelection, fetchStreetStatuses]);
+
+  // Get selected streets data for modal (including assigned users from current status)
+  const selectedStreetsData = Array.from(selectedStreetIds).map(id => {
+    const street = streets.find(s => s.id === id);
+    const statusData = streetStatuses.get(id);
+    return street ? { 
+      id: street.id, 
+      name: street.name,
+      assignedUsers: statusData?.assignedUsers || []
+    } : null;
+  }).filter(Boolean) as { id: string; name: string; assignedUsers: string[] }[];
+
+  // Get all unique assigned users from selected streets (for pre-selection in completion modal)
+  const preSelectedUsers = Array.from(new Set(
+    selectedStreetsData.flatMap(s => s.assignedUsers)
+  ));
 
   // Load city on mount
   useEffect(() => {
@@ -447,6 +600,38 @@ export default function Streets({ role, user }: StreetsProps) {
               Gebiete verwalten
             </button>
           )}
+
+          {/* Multi-select toggle button */}
+          {role !== "gast" && (
+            <button 
+              onClick={toggleMultiSelectMode} 
+              className={`multi-select-toggle-btn ${multiSelectMode ? 'active' : ''}`}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                {multiSelectMode ? (
+                  <>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </>
+                ) : (
+                  <>
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </>
+                )}
+              </svg>
+              {multiSelectMode ? 'Abbrechen' : 'Mehrere wählen'}
+            </button>
+          )}
         </div>
 
         <div className="areas-list">
@@ -496,6 +681,11 @@ export default function Streets({ role, user }: StreetsProps) {
                   onMoveStreet={moveStreet}
                   role={role}
                   selectedDate={selectedDate}
+                  multiSelectMode={multiSelectMode}
+                  selectedStreetIds={selectedStreetIds}
+                  onToggleStreetSelection={toggleStreetSelection}
+                  onSelectAllInArea={selectAllInArea}
+                  onDeselectAllInArea={deselectAllInArea}
                 />
               );
             })
@@ -508,6 +698,87 @@ export default function Streets({ role, user }: StreetsProps) {
             cityId={city.id}
             onClose={() => setShowAreaManager(false)}
             onRefresh={refreshData}
+          />
+        )}
+
+        {/* Floating action bar for multi-select */}
+        {multiSelectMode && selectedStreetIds.size > 0 && (
+          <div className="multi-select-action-bar">
+            <div className="action-bar-info">
+              <span className="selected-count">{selectedStreetIds.size} ausgewählt</span>
+              <button className="clear-selection-btn" onClick={clearSelection}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="action-bar-buttons">
+              <button 
+                className="action-btn offen"
+                onClick={() => handleBatchStatusChange("offen")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                Offen
+              </button>
+              <button 
+                className="action-btn auf-dem-weg"
+                onClick={() => handleBatchStatusChange("auf_dem_weg")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 3h15v13H1z" />
+                  <path d="M16 8h3l3 3v5h-6V8z" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+                Auf dem Weg
+              </button>
+              <button 
+                className="action-btn erledigt"
+                onClick={() => handleBatchStatusChange("erledigt")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Erledigt
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Batch completion modal (erledigt) */}
+        {showBatchModal && batchAction === "erledigt" && currentUserId && selectedStreetsData.length > 0 && (
+          <TeamCompletionModal
+            streets={selectedStreetsData}
+            date={selectedDate.toISOString().split("T")[0]}
+            currentUserId={currentUserId}
+            preSelectedUsers={preSelectedUsers}
+            onClose={() => {
+              setShowBatchModal(false);
+              setBatchAction(null);
+            }}
+            onSuccess={handleBatchCompletion}
+          />
+        )}
+
+        {/* Batch start modal (auf_dem_weg) */}
+        {showBatchModal && batchAction === "auf_dem_weg" && currentUserId && selectedStreetsData.length > 0 && (
+          <BatchStartModal
+            streets={selectedStreetsData}
+            date={selectedDate.toISOString().split("T")[0]}
+            currentUserId={currentUserId}
+            onClose={() => {
+              setShowBatchModal(false);
+              setBatchAction(null);
+            }}
+            onSuccess={() => {
+              setShowBatchModal(false);
+              setBatchAction(null);
+              clearSelection();
+              fetchStreetStatuses();
+            }}
           />
         )}
       </div>
